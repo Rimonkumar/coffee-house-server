@@ -1,17 +1,19 @@
-const express = require('express')
+const express = require('express');
 const cors = require('cors');
-const app = express();
 require('dotenv').config();
-const port = process.env.PORT || 3000
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+const app = express();
+const port = process.env.PORT || 3000;
 
+// Middleware (অবশ্যই রাউটগুলোর উপরে থাকতে হবে)
+app.use(cors());
+app.use(express.json());
 
-
+// MongoDB URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@rimonbd.nvxa1st.mongodb.net/?appName=RimonBD`;
 
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// Create MongoClient
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -22,18 +24,22 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // Connect the client (Optional for Vercel/Serverless but good for local)
+        // await client.connect();
 
         const coffeeCollection = client.db("coffeeDB").collection("coffee");
         const usersCollection = client.db("coffeeDB").collection("users");
 
+        // --- Coffee Related APIs ---
+
+        // Get all coffees
         app.get('/coffees', async (req, res) => {
             const cursor = coffeeCollection.find();
             const result = await cursor.toArray();
             res.send(result);
         });
 
+        // Get single coffee by ID
         app.get('/coffees/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
@@ -46,13 +52,14 @@ async function run() {
             }
         });
 
+        // Add new coffee
         app.post('/coffees', async (req, res) => {
             const newCoffee = req.body;
-            console.log(newCoffee)
             const result = await coffeeCollection.insertOne(newCoffee);
             res.send(result);
-        })
+        });
 
+        // Delete coffee
         app.delete('/coffees/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
@@ -60,6 +67,7 @@ async function run() {
             res.send(result);
         });
 
+        // Update coffee
         app.put('/coffees/:id', async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
@@ -69,7 +77,7 @@ async function run() {
             const coffee = {
                 $set: {
                     name: updatedCoffee.name,
-                    quentity: updatedCoffee.quentity,
+                    quantity: updatedCoffee.quantity, // বানান ঠিক করা হয়েছে (quentity -> quantity)
                     supplier: updatedCoffee.supplier,
                     taste: updatedCoffee.taste,
                     details: updatedCoffee.details,
@@ -82,16 +90,12 @@ async function run() {
             res.send(result);
         });
 
+        // --- User Related APIs ---
 
-        // user related apis 
         app.post('/users', async (req, res) => {
             try {
                 const newUser = req.body;
-                console.log('Registering new user:', newUser);
-
-                // Use insertOne to save the user, NOT deleteOne
                 const result = await usersCollection.insertOne(newUser);
-
                 res.status(201).send(result);
             } catch (error) {
                 console.error(error);
@@ -99,22 +103,24 @@ async function run() {
             }
         });
 
-
+        // Ping MongoDB
         await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
-        // await client.close();
+        console.log("Successfully connected to MongoDB!");
+
+    } catch (error) {
+        console.error("Connection error:", error);
     }
 }
+
+// Run the database connection
 run().catch(console.dir);
 
-
-app.use(cors());
-app.use(express.json());
+// Root route
 app.get('/', (req, res) => {
-    res.send('Coffee server id geating hotter')
-})
+    res.send('Coffee server is getting hotter!');
+});
 
+// Start server
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+    console.log(`Server is running on port: ${port}`);
+});
