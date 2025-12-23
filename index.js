@@ -7,7 +7,15 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware (অবশ্যই রাউটগুলোর উপরে থাকতে হবে)
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'https://coffee-store-server-rimonkumars-projects.vercel.app'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
+
 app.use(express.json());
 
 // MongoDB URI
@@ -77,7 +85,7 @@ async function run() {
             const coffee = {
                 $set: {
                     name: updatedCoffee.name,
-                    quantity: updatedCoffee.quantity, // বানান ঠিক করা হয়েছে (quentity -> quantity)
+                    quantity: updatedCoffee.quantity,
                     supplier: updatedCoffee.supplier,
                     taste: updatedCoffee.taste,
                     details: updatedCoffee.details,
@@ -103,6 +111,18 @@ async function run() {
             }
         });
 
+        // Get all users from the database
+        app.get('/users', async (req, res) => {
+            try {
+                const cursor = usersCollection.find();
+                const result = await cursor.toArray();
+                res.send(result);
+            } catch (error) {
+                console.error("Error fetching users:", error);
+                res.status(500).send({ message: "Could not fetch users" });
+            }
+        });
+
         // Ping MongoDB
         await client.db("admin").command({ ping: 1 });
         console.log("Successfully connected to MongoDB!");
@@ -124,3 +144,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port: ${port}`);
 });
+module.exports = app;
