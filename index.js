@@ -1,147 +1,119 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-const port = process.env.PORT || 3000;
 
-// Middleware (অবশ্যই রাউটগুলোর উপরে থাকতে হবে)
-app.use(cors({
+// 🔥 MUST: Explicit CORS config
+app.use(
+  cors({
     origin: [
-        'http://localhost:5173',
-        'https://coffee-store-server-rimonkumars-projects.vercel.app'
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://coffee-store-client.vercel.app" // future frontend
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true
-}));
+  })
+);
+
+// 🔥 Handle preflight requests
+app.options("*", cors());
 
 app.use(express.json());
 
 // MongoDB URI
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@rimonbd.nvxa1st.mongodb.net/?appName=RimonBD`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@rimonbd.nvxa1st.mongodb.net/?retryWrites=true&w=majority&appName=RimonBD`;
 
-// Create MongoClient
+// Mongo Client (Global for serverless)
 const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    }
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true
+  }
 });
 
-async function run() {
-    try {
-        // Connect the client (Optional for Vercel/Serverless but good for local)
-        // await client.connect();
+let coffeeCollection;
+let usersCollection;
 
-        const coffeeCollection = client.db("coffeeDB").collection("coffee");
-        const usersCollection = client.db("coffeeDB").collection("users");
-
-        // --- Coffee Related APIs ---
-
-        // Get all coffees
-        app.get('/coffees', async (req, res) => {
-            const cursor = coffeeCollection.find();
-            const result = await cursor.toArray();
-            res.send(result);
-        });
-
-        // Get single coffee by ID
-        app.get('/coffees/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await coffeeCollection.findOne(query);
-
-            if (result) {
-                res.send(result);
-            } else {
-                res.status(404).send({ message: "Coffee not found" });
-            }
-        });
-
-        // Add new coffee
-        app.post('/coffees', async (req, res) => {
-            const newCoffee = req.body;
-            const result = await coffeeCollection.insertOne(newCoffee);
-            res.send(result);
-        });
-
-        // Delete coffee
-        app.delete('/coffees/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await coffeeCollection.deleteOne(query);
-            res.send(result);
-        });
-
-        // Update coffee
-        app.put('/coffees/:id', async (req, res) => {
-            const id = req.params.id;
-            const filter = { _id: new ObjectId(id) };
-            const options = { upsert: true };
-            const updatedCoffee = req.body;
-
-            const coffee = {
-                $set: {
-                    name: updatedCoffee.name,
-                    quantity: updatedCoffee.quantity,
-                    supplier: updatedCoffee.supplier,
-                    taste: updatedCoffee.taste,
-                    details: updatedCoffee.details,
-                    photo: updatedCoffee.photo,
-                    price: updatedCoffee.price
-                }
-            };
-
-            const result = await coffeeCollection.updateOne(filter, coffee, options);
-            res.send(result);
-        });
-
-        // --- User Related APIs ---
-
-        app.post('/users', async (req, res) => {
-            try {
-                const newUser = req.body;
-                const result = await usersCollection.insertOne(newUser);
-                res.status(201).send(result);
-            } catch (error) {
-                console.error(error);
-                res.status(500).send({ message: "Internal Server Error" });
-            }
-        });
-
-        // Get all users from the database
-        app.get('/users', async (req, res) => {
-            try {
-                const cursor = usersCollection.find();
-                const result = await cursor.toArray();
-                res.send(result);
-            } catch (error) {
-                console.error("Error fetching users:", error);
-                res.status(500).send({ message: "Could not fetch users" });
-            }
-        });
-
-        // Ping MongoDB
-        await client.db("admin").command({ ping: 1 });
-        console.log("Successfully connected to MongoDB!");
-
-    } catch (error) {
-        console.error("Connection error:", error);
-    }
+async function connectDB() {
+  if (!coffeeCollection) {
+    await client.connect();
+    const db = client.db("coffeeDB");
+    coffeeCollection = db.collection("coffee");
+    usersCollection = db.collection("users");
+    console.log("MongoDB connected");
+  }
 }
+connectDB();
 
-// Run the database connection
-run().catch(console.dir);
+// -------------------- Routes --------------------
 
-// Root route
-app.get('/', (req, res) => {
-    res.send('Coffee server is getting hotter!');
+app.get("/", (req, res) => {
+  res.send("Coffee server is getting hotter!");
 });
 
-// Start server
-app.listen(port, () => {
-    console.log(`Server is running on port: ${port}`);
+// Get all coffees
+app.get("/coffees", async (req, res) => {
+  await connectDB();
+  const result = await coffeeCollection.find().toArray();
+  res.send(result);
 });
+
+// Get single coffee
+app.get("/coffees/:id", async (req, res) => {
+  await connectDB();
+  const id = req.params.id;
+  const result = await coffeeCollection.findOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+
+// Add coffee
+app.post("/coffees", async (req, res) => {
+  await connectDB();
+  const result = await coffeeCollection.insertOne(req.body);
+  res.send(result);
+});
+
+// Delete coffee
+app.delete("/coffees/:id", async (req, res) => {
+  await connectDB();
+  const id = req.params.id;
+  const result = await coffeeCollection.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+
+// Update coffee
+app.put("/coffees/:id", async (req, res) => {
+  await connectDB();
+  const id = req.params.id;
+
+  const updateDoc = {
+    $set: req.body
+  };
+
+  const result = await coffeeCollection.updateOne(
+    { _id: new ObjectId(id) },
+    updateDoc,
+    { upsert: true }
+  );
+
+  res.send(result);
+});
+
+// Users
+app.post("/users", async (req, res) => {
+  await connectDB();
+  const result = await usersCollection.insertOne(req.body);
+  res.send(result);
+});
+
+app.get("/users", async (req, res) => {
+  await connectDB();
+  const result = await usersCollection.find().toArray();
+  res.send(result);
+});
+
 module.exports = app;
